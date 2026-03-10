@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import yaml
+from dotenv import load_dotenv
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -15,6 +16,7 @@ from data.storage import ParquetStorage
 
 
 def main() -> None:
+    load_dotenv()
     config = yaml.safe_load(Path("config/backtest_config.yaml").read_text(encoding="utf-8"))
     data_cfg = config["data"]
     session_cfg = config["sessions"]["equity"]

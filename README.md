@@ -16,7 +16,7 @@ The fetcher uses a source-agnostic output schema and will:
 
 ## Alpaca credentials
 
-Set credentials via environment variables (or `.env` loaded by your shell):
+Set credentials via environment variables (or project-root `.env`; `scripts/fetch_data.py` auto-loads it):
 
 ```bash
 export APCA_API_KEY_ID="..."
