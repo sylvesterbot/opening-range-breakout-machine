@@ -10,7 +10,9 @@ dependencies = [
   "loguru>=0.7",
   "pyarrow>=15.0",
   "yfinance>=0.2.36",
+  "matplotlib>=3.8",
 ]
+
 
 [project.optional-dependencies]
 dev = [
