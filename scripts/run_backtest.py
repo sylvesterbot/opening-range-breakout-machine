@@ -21,6 +21,7 @@ def main() -> None:
         "initial_capital": 100000,
         "commission_per_share": 0.005,
         "slippage_pct": 0.01,
+        "spread_bps": 1.0,
         "benchmark": "SPY",
     })
 
@@ -37,6 +38,7 @@ def main() -> None:
             initial_capital=float(bt_cfg["initial_capital"]),
             commission_per_share=float(bt_cfg["commission_per_share"]),
             slippage_pct=float(bt_cfg["slippage_pct"]),
+            spread_bps=float(bt_cfg.get("spread_bps", 1.0)),
             benchmark=str(bt_cfg["benchmark"]),
         )
     )
@@ -47,11 +49,11 @@ def main() -> None:
     plot_path = plot_equity_curve(equity, Path("output/plots/equity_curve.png"))
 
     print("=== Phase 5 Backtest Summary ===")
-    for k, v in metrics.items():
-        print(f"{k}: {v}")
-    print(f"benchmark_buy_hold_return: {bench_ret}")
-    print(f"trades: {len(trades)}")
-    print(f"equity_plot: {plot_path}")
+    summary_table = "\n".join([f"{k:>24} | {v}" for k, v in metrics.items()])
+    print(summary_table)
+    print(f"{'benchmark_buy_hold_return':>24} | {bench_ret}")
+    print(f"{'trades':>24} | {len(trades)}")
+    print(f"{'equity_plot':>24} | {plot_path}")
 
     # manual 5-day subset cross-check note
     if not trades.empty:

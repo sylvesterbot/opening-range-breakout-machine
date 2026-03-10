@@ -29,4 +29,5 @@ backtest:
   initial_capital: 100000
   commission_per_share: 0.005
   slippage_pct: 0.01
+  spread_bps: 1.0
   benchmark: "SPY"

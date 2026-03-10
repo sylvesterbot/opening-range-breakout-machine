@@ -17,6 +17,7 @@ class BacktestConfig:
     initial_capital: float
     commission_per_share: float
     slippage_pct: float
+    spread_bps: float
     benchmark: str
 
 
@@ -55,7 +56,8 @@ class BacktestEngine:
             side = str(signal["side"])
             base_open = float(row["open"])
             slip = self.config.slippage_pct / 100.0
-            entry_fill = base_open * (1 + slip) if side == "long" else base_open * (1 - slip)
+            spread = self.config.spread_bps / 10000.0
+            entry_fill = base_open * (1 + slip + spread / 2) if side == "long" else base_open * (1 - slip - spread / 2)
 
             stop = float(signal["stop_price"])
             target = float(signal["target_price"])
@@ -94,8 +96,9 @@ class BacktestEngine:
                         exit_idx = j
                         break
 
+            exit_fill = exit_price * (1 - spread / 2) if side == "long" else exit_price * (1 + spread / 2)
             commission = self.config.commission_per_share * size * 2
-            gross = (exit_price - entry_fill) * size if side == "long" else (entry_fill - exit_price) * size
+            gross = (exit_fill - entry_fill) * size if side == "long" else (entry_fill - exit_fill) * size
             net = gross - commission
             realized += net
             equity = self.config.initial_capital + realized
@@ -106,6 +109,7 @@ class BacktestEngine:
                     "side": side,
                     "entry_fill_price": entry_fill,
                     "exit_price": exit_price,
+                    "exit_fill_price": exit_fill,
                     "size": size,
                     "commission_paid": commission,
                     "gross_pnl": gross,

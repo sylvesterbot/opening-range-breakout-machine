@@ -36,7 +36,13 @@ def _signals() -> pd.DataFrame:
 
 def test_engine_next_bar_open_fill_and_costs() -> None:
     engine = BacktestEngine(
-        BacktestConfig(initial_capital=100000, commission_per_share=0.005, slippage_pct=0.01, benchmark="SPY")
+        BacktestConfig(
+            initial_capital=100000,
+            commission_per_share=0.005,
+            slippage_pct=0.01,
+            spread_bps=0.0,
+            benchmark="SPY",
+        )
     )
     trades, equity = engine.run(_bars(), _signals())
 
@@ -49,7 +55,13 @@ def test_engine_next_bar_open_fill_and_costs() -> None:
 
 def test_metrics_returns_required_keys() -> None:
     engine = BacktestEngine(
-        BacktestConfig(initial_capital=100000, commission_per_share=0.005, slippage_pct=0.0, benchmark="SPY")
+        BacktestConfig(
+            initial_capital=100000,
+            commission_per_share=0.005,
+            slippage_pct=0.0,
+            spread_bps=1.0,
+            benchmark="SPY",
+        )
     )
     trades, equity = engine.run(_bars(), _signals())
     metrics = compute_metrics(equity, trades)
