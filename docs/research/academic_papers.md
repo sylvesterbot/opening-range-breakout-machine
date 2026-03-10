@@ -1,40 +1,21 @@
-# Phase 1 Academic/Reference Sources (Verifiable)
+# Academic & Research Notes (ORB / Adjacent Intraday)
 
-This file tracks research references used for ORB design, with links that can be independently checked.
+## 1) Intraday Momentum: The First Half-Hour Return Predicts the Last Half-Hour Return
+- Authors: Luyang Gao, Yufeng Han, Sophia Z. Li, Guofu Zhou
+- Venue: Journal of Financial Economics (2018)
+- DOI: https://doi.org/10.1016/j.jfineco.2018.04.008
+- Relevance: Supports informational significance of opening-session price action for intraday strategy design.
 
-## A) Intraday behavior / microstructure
+## 2) Practitioner Quant Research (Code-Reproducible)
+### QuantConnect: Opening Range Breakout for Stocks in Play
+- URL: https://www.quantconnect.com/research/18444/opening-range-breakout-for-stocks-in-play/
+- Relevance: Practical ORB architecture, universe/volume context, and backtest framing.
 
-1. **Andersen, T. G., & Bollerslev, T. (1997)**  
-   *Intraday periodicity and volatility persistence in financial markets.* Journal of Empirical Finance.  
-   DOI: https://doi.org/10.1016/S0927-5398(97)00004-2
-
-2. **Admati, A. R., & Pfleiderer, P. (1988)**  
-   *A Theory of Intraday Patterns: Volume and Price Variability.* Review of Financial Studies.  
-   DOI: https://doi.org/10.1093/rfs/1.1.3
-
-## B) Backtest quality / overfitting controls
-
-3. **Bailey, D. H., Borwein, J., López de Prado, M., & Zhu, Q. J. (2014)**  
-   *The Probability of Backtest Overfitting.* SSRN.  
-   SSRN link: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2326253
-
-## C) Execution context / market session definitions
-
-4. **NYSE Hours & Calendars**  
-   https://www.nyse.com/markets/hours-calendars
-
-5. **NASDAQ U.S. Market Holiday / Session Calendar**  
-   https://www.nasdaq.com/market-activity/stock-market-holiday-calendar
-
-## D) Data-engineering implementation references
-
-6. **Alpaca Market Data FAQ**  
-   https://docs.alpaca.markets/docs/market-data-faq
-
-7. **Pandas `between_time` docs** (session-window filtering helper)  
-   https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.between_time.html
+## 3) Foundational ORB Book Reference
+### Toby Crabel — Day Trading with Short-Term Price Patterns and Opening Range Breakout
+- URL: https://www.amazon.com/Day-Trading-Short-Term-Patterns-Opening/dp/0934380171
+- Relevance: Historical/legacy ORB framework used in many modern variants.
 
 ## Notes
-
-- Only references with publicly reachable URLs/DOIs are included here.
-- Any new claim in later phases should be linked back to one of these references or an added verifiable source.
+- In this pass, directly ORB-specific peer-reviewed literature with full reproducible modern intraday datasets is limited.
+- Implementation will therefore rely on config-driven hypothesis testing and robustness validation (Monte Carlo + parameter sensitivity) instead of assuming fixed “optimal” rules.
