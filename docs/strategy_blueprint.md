@@ -1,177 +1,158 @@
-# Phase 2 Strategy Blueprint — Opening Range Breakout (ORB)
+# ORB Strategy Blueprint
 
-## 1) Strategy Definition (Config-driven)
+## 1) Session and Opening Range Definitions
 
-### Required config keys
-```yaml
-market:
-  timezone: America/New_York
-  session_open: "09:30"
-  session_close: "16:00"
+Let trading day be indexed by \(d\), bar timestamp by \(t\), and session open time by \(T_{open,d}\).
 
-orb:
-  opening_range_minutes: 5        # e.g. 5/15/30
-  breakout_buffer_bps: 2          # breakout confirmation buffer
-  volume_filter_enabled: true
-  volume_multiplier_min: 1.2
-  one_trade_per_day: true
+- Session profile (configurable):
+  - Equity: \(T_{open}=09{:}30\) US/Eastern
+  - Forex London: \(08{:}00\) Europe/London
+  - Forex New York: \(08{:}00\) US/Eastern
+- Opening range length: \(N \in \{5,15,30\}\) minutes
+- Opening range interval:
+  \[
+  \mathcal{I}_{OR,d} = [T_{open,d}, T_{open,d} + N\text{ min})
+  \]
+- Opening range bounds:
+  \[
+  ORH_d = \max_{t \in \mathcal{I}_{OR,d}} High_t, \quad ORL_d = \min_{t \in \mathcal{I}_{OR,d}} Low_t
+  \]
+- Range size:
+  \[
+  ORR_d = ORH_d - ORL_d
+  \]
 
-risk:
-  risk_per_trade_pct: 0.005       # 0.5% of equity
-  stop_method: "or_opposite"      # or_opposite | atr_multiple
-  atr_period: 14
-  atr_stop_mult: 1.5
-  max_holding_minutes: 120
-  force_exit_time: "15:55"
+### Data/Calendar handling rules
+- Exclude pre-market from OR for equity profile.
+- For half-days/early close, still compute OR from session open; force liquidation \(exit\_before\_close\_minutes\) before early close.
+- If bars are missing inside \(\mathcal{I}_{OR,d}\), mark day invalid for trading unless gap tolerance in config permits interpolation.
 
-execution:
-  slippage_bps: 1.0
-  commission_per_share: 0.005
-  fill_model: next_bar_open
-```
+## 2) Entry Rules
 
-No constants should be hardcoded in strategy logic.
-
----
-
-## 2) Precise formulas
-
-### 2.1 Opening range bounds
-Given bars indexed by timestamp `t` in session day `d`, with opening window length `N` minutes:
-
-- Opening range high:
+Define entry window end:
 \[
-ORH_d = \max_{t \in [open_d, open_d + N)} High_t
+T_{entry\_end,d} = T_{open,d} + H\text{ hours}
 \]
+where \(H\) is configurable (default 2).
 
-- Opening range low:
+For each bar \(t\in[T_{open,d}+N\text{ min}, T_{entry\_end,d}]\):
+
+### Long trigger
 \[
-ORL_d = \min_{t \in [open_d, open_d + N)} Low_t
+Close_t > ORH_d
 \]
+with confirmation mode:
+- `close`: above condition only
+- `volume`: \(Volume_t \ge m \cdot \overline{Volume}_{lookback,t}\)
+- `both`: both conditions true
 
-### 2.2 Breakout thresholds (buffered)
-With buffer in basis points `b`:
+### Short trigger
 \[
-U_d = ORH_d \cdot (1 + b/10000)
+Close_t < ORL_d
 \]
-\[
-L_d = ORL_d \cdot (1 - b/10000)
-\]
+with same confirmation modes.
 
-### 2.3 Entry conditions
-At bar `t > open_d + N`:
+### Trade frequency
+- Max entries per direction per day: \(E_{max}\) (default 1).
 
-- Long entry if:
-\[
-Close_t > U_d
-\]
-(and optional volume filter)
+## 3) Exit Rules
 
-- Short entry if:
-\[
-Close_t < L_d
-\]
-(and optional volume filter)
+For long entry price \(P_{in}\):
+- Stop-loss (default): \(P_{sl} = ORL_d\)
+- Risk unit: \(R = P_{in} - P_{sl}\)
+- Take-profit: \(P_{tp} = P_{in} + kR\), where \(k\in\{1.0,1.5,2.0,3.0\}\)
 
-Volume filter example:
-\[
-Volume_t \ge m \cdot \text{MedianVolume}_{k\text{-bar lookback}}
-\]
-where `m = volume_multiplier_min`.
-
-### 2.4 Position sizing
-Let equity be `E_t`, risk fraction `r`, entry price `P_e`, stop price `P_s`.
-
-Dollar risk budget:
-\[
-R_\$ = E_t \cdot r
-\]
-
-Per-unit risk:
-\[
-R_{unit} = |P_e - P_s|
-\]
-
-Units (shares/contracts, floored):
-\[
-Q = \left\lfloor \frac{R_\$}{R_{unit}} \right\rfloor
-\]
-
-### 2.5 Exit logic
-- Stop exit when price crosses stop level.
-- Time exit when holding time exceeds `max_holding_minutes`.
-- Hard end-of-day exit at `force_exit_time`.
-
-### 2.6 PnL model
-For long:
-\[
-PnL = Q \cdot (P_x - P_e) - Costs
-\]
 For short:
+- \(P_{sl} = ORH_d\)
+- \(R = P_{sl} - P_{in}\)
+- \(P_{tp} = P_{in} - kR\)
+
+### Time-based liquidation
+Force close all open positions at:
 \[
-PnL = Q \cdot (P_e - P_x) - Costs
+T_{force\_exit,d} = T_{close,d} - M\text{ minutes}
+\]
+where \(M\) is configurable.
+
+### Optional trailing stop
+Activate trailing when unrealized PnL \(\ge aR\), with \(a\) default 1.0.
+Then trailing distance \(= bR\), \(b\) default 0.5.
+
+## 4) Position Sizing
+
+Given account equity \(A_t\), risk fraction \(r\) (default 0.01):
+\[
+\text{DollarRisk} = A_t \cdot r
+\]
+\[
+\text{UnitRisk} = |P_{in} - P_{sl}|
+\]
+\[
+\text{RawSize} = \frac{\text{DollarRisk}}{\text{UnitRisk}}
 \]
 
-Transaction costs:
+Cap by max position fraction \(c\) (default 0.10):
 \[
-Costs = Q \cdot (commission\_per\_share + slippage\_component)
+\text{CapSize} = \frac{A_t \cdot c}{P_{in}}
+\]
+\[
+\text{Size} = \max(0, \min(\text{RawSize}, \text{CapSize}))
 \]
 
----
+### Edge-case guards
+- If \(\text{UnitRisk} \le 0\): reject signal (avoid division by zero/invalid stop).
+- If size < minimum lot/share: reject trade.
 
-## 3) Backtest pseudocode
+## 5) Optional Filters
+
+- Minimum range filter:
+\[
+ORR_d \ge \alpha \cdot ATR_{daily,d}
+\]
+- Maximum range filter:
+\[
+ORR_d \le \beta \cdot ATR_{daily,d}
+\]
+- Trend filter (long only):
+\[
+Close^{daily}_d > SMA_{n}^{daily}(d)
+\]
+- Trend filter (short only):
+\[
+Close^{daily}_d < SMA_{n}^{daily}(d)
+\]
+
+## Signal Generation Pseudocode
 
 ```text
-for each trading day d:
-  bars_d = session bars for d
-  if insufficient bars: continue
+for each day d:
+  load session bars for day d in target timezone
+  if insufficient OR bars: continue
 
-  compute ORH_d, ORL_d from first N minutes
-  compute U_d, L_d (buffered thresholds)
+  ORH, ORL = opening_range(day=d, minutes=N)
+  if not range_filters_pass(ORH, ORL, atr): continue
 
-  position = flat
-  traded_today = false
+  long_used = 0
+  short_used = 0
 
-  for each bar t after opening window:
-    if position is flat:
-      if one_trade_per_day and traded_today: break
+  for bar t from OR end to entry_window_end:
+    if long_used < E_max and long_condition(t, ORH, confirmation):
+      create long trade with SL=ORL, TP=P_in + k*(P_in-ORL)
+      long_used += 1
 
-      if long_condition(t):
-        entry = next_bar_open(t)
-        stop = determine_stop_long(ORL_d, ATR, config)
-        qty = position_size(equity, entry, stop, risk_pct)
-        if qty > 0:
-          open long position
-          traded_today = true
+    if short_used < E_max and short_condition(t, ORL, confirmation):
+      create short trade with SL=ORH, TP=P_in - k*(ORH-P_in)
+      short_used += 1
 
-      else if short_condition(t):
-        entry = next_bar_open(t)
-        stop = determine_stop_short(ORH_d, ATR, config)
-        qty = position_size(equity, entry, stop, risk_pct)
-        if qty > 0:
-          open short position
-          traded_today = true
+    update open trades (stop/tp/trailing)
 
-    else:
-      if stop_hit(position, t):
-        exit at modeled fill
-      else if time_exit_reached(position, t):
-        exit at modeled fill
-      else if t >= force_exit_time:
-        exit at modeled fill
-
-  append trade(s) to ledger
-
-compute equity curve from ledger
-compute metrics (CAGR, Sharpe, max DD, win rate, profit factor)
+  force close any open trade at session_close - M minutes
 ```
 
----
-
-## 4) Acceptance criteria checklist (Phase 2)
-
-- [x] ORB logic defined with explicit formulas
-- [x] Entry/exit and sizing rules fully specified
-- [x] Pseudocode suitable for direct implementation
-- [x] Config-first parameterization documented
-- [x] No Strategy implementation code written yet
+## Risk Principles and Edge Framing
+- Expectancy objective:
+\[
+\mathbb{E}[trade] = p_w \cdot AvgWin - (1-p_w) \cdot AvgLoss > 0
+\]
+- Robustness objective: maintain positive expectancy across neighborhoods of \((N, k, r)\), not just one point estimate.
+- No overnight risk: all positions flat by end-of-session profile.
