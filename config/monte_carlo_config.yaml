@@ -1,0 +1,8 @@
+monte_carlo:
+  iterations: 5000
+  max_iterations: 10000
+  convergence_threshold: 0.001
+  early_stopping: true
+  slippage_range: [0.0, 0.02]
+  random_seed: 42
+  output_dir: "output/backtests"
