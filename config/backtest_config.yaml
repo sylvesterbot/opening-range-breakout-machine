@@ -1,0 +1,25 @@
+data:
+  asset_class: "equity"
+  symbols: ["SPY", "QQQ"]
+  interval: "5m"
+  start_date: "2026-03-03"
+  end_date: "2026-03-07"
+  source: "yfinance"
+  timezone: "UTC"
+  session_hours_only: true
+  cache_dir: "data/cache"
+  processed_dir: "data/processed"
+
+sessions:
+  equity:
+    open: "09:30"
+    close: "16:00"
+    timezone: "US/Eastern"
+  forex_london:
+    open: "08:00"
+    close: "16:30"
+    timezone: "Europe/London"
+  forex_newyork:
+    open: "08:00"
+    close: "17:00"
+    timezone: "US/Eastern"
