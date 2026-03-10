@@ -20,6 +20,10 @@ def generate_orb_signals(
     entry_confirmation: str,
     volume_threshold_multiplier: float,
     max_entries_per_day: int,
+    min_range_atr_pct: float = 0.0,
+    max_range_atr_pct: float = 1e9,
+    trend_filter_enabled: bool = False,
+    trend_sma_period: int = 20,
 ) -> pd.DataFrame:
     """Generate ORB entry signals from intraday bars.
 
@@ -45,6 +49,18 @@ def generate_orb_signals(
 
     df = bars.copy().sort_values("timestamp").reset_index(drop=True)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+
+    daily = (
+        df.assign(date=df["timestamp"].dt.date)
+        .groupby("date", as_index=False)
+        .agg(high=("high", "max"), low=("low", "min"), close=("close", "last"))
+    )
+    daily["prev_close"] = daily["close"].shift(1)
+    daily["tr"] = (daily["high"] - daily["low"]).abs()
+    daily["atr14"] = daily["tr"].rolling(14, min_periods=1).mean()
+    daily["sma"] = daily["close"].rolling(trend_sma_period, min_periods=1).mean()
+    daily_map = daily.set_index("date").to_dict(orient="index")
+
     out: list[dict[str, object]] = []
 
     for _, day in df.groupby(df["timestamp"].dt.date):
@@ -60,6 +76,16 @@ def generate_orb_signals(
         or_high = float(or_slice["high"].max())
         or_low = float(or_slice["low"].min())
         avg_vol = float(or_slice["volume"].mean())
+        or_range = or_high - or_low
+
+        dmeta = daily_map.get(day["timestamp"].iloc[0].date(), {"atr14": 0.0, "sma": 0.0, "close": 0.0})
+        atr = float(dmeta.get("atr14", 0.0) or 0.0)
+        if atr > 0:
+            min_allowed = min_range_atr_pct * atr
+            max_allowed = max_range_atr_pct * atr
+            if or_range < min_allowed or or_range > max_allowed:
+                logger.info("Rejected day by ATR range filter")
+                continue
 
         long_count = 0
         short_count = 0
@@ -71,6 +97,12 @@ def generate_orb_signals(
 
             long_ok = _entry_ok(entry_confirmation, close_confirm_long, vol_confirm)
             short_ok = _entry_ok(entry_confirmation, close_confirm_short, vol_confirm)
+
+            if trend_filter_enabled:
+                day_close = float(dmeta.get("close", row["close"]))
+                day_sma = float(dmeta.get("sma", day_close))
+                long_ok = long_ok and day_close > day_sma
+                short_ok = short_ok and day_close < day_sma
 
             if long_ok and long_count < max_entries_per_day:
                 out.append(

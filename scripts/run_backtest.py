@@ -15,10 +15,10 @@ from strategy.orb import ORBStrategy
 from visualization.equity_curve import plot_equity_curve
 
 
-def _session_open_utc(backtest_cfg: dict, strategy: ORBStrategy) -> str:
+def _session_time_utc(backtest_cfg: dict, strategy: ORBStrategy, key: str) -> str:
     profile = str(strategy.orb_config.get("session_profile", "equity"))
     session_cfg = backtest_cfg["sessions"][profile]
-    hh, mm = map(int, str(session_cfg["open"]).split(":"))
+    hh, mm = map(int, str(session_cfg[key]).split(":"))
     tz_name = str(session_cfg["timezone"])
     now = datetime.now(ZoneInfo(tz_name))
     local_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
@@ -37,6 +37,7 @@ def main() -> None:
         "spread_bps": 1.0,
         "benchmark": "SPY",
     })
+    risk_cfg = strategy.risk_config
 
     storage = ParquetStorage(cache_dir=Path(data_cfg["cache_dir"]), processed_dir=Path(data_cfg["processed_dir"]))
     symbol = data_cfg["symbols"][0]
@@ -45,7 +46,8 @@ def main() -> None:
     if bars is None or bars.empty:
         raise RuntimeError(f"No cached bars for {key}; run scripts/fetch_data.py first")
 
-    session_open_utc = _session_open_utc(backtest_cfg, strategy)
+    session_open_utc = _session_time_utc(backtest_cfg, strategy, "open")
+    session_close_utc = _session_time_utc(backtest_cfg, strategy, "close")
     signals = strategy.run(bars, session_open=session_open_utc, account_equity=float(bt_cfg["initial_capital"]))
     engine = BacktestEngine(
         BacktestConfig(
@@ -54,6 +56,11 @@ def main() -> None:
             slippage_pct=float(bt_cfg["slippage_pct"]),
             spread_bps=float(bt_cfg.get("spread_bps", 1.0)),
             benchmark=str(bt_cfg["benchmark"]),
+            trailing_stop_enabled=bool(risk_cfg.get("trailing_stop_enabled", False)),
+            trailing_stop_activation_r=float(risk_cfg.get("trailing_stop_activation_r", 1.0)),
+            trailing_stop_trail_r=float(risk_cfg.get("trailing_stop_trail_r", 0.5)),
+            exit_before_close_minutes=int(risk_cfg.get("exit_before_close_minutes", 5)),
+            session_close_utc=session_close_utc,
         )
     )
     trades, equity = engine.run(bars, signals)

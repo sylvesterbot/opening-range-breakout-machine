@@ -22,13 +22,18 @@ class ORBStrategy:
 
     orb_config: dict[str, Any]
     risk_config: dict[str, Any]
+    filters_config: dict[str, Any] | None = None
 
     @classmethod
     def from_yaml(cls, config_path: Path) -> "ORBStrategy":
         """Create strategy instance from YAML config."""
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         logger.info("Loaded ORB strategy config from %s", config_path)
-        return cls(orb_config=payload["orb"], risk_config=payload["risk"])
+        return cls(
+            orb_config=payload["orb"],
+            risk_config=payload["risk"],
+            filters_config=payload.get("filters", {}),
+        )
 
     def run(self, bars: pd.DataFrame, session_open: str, account_equity: float = 100_000.0) -> pd.DataFrame:
         """Run ORB signal generation and position sizing.
@@ -49,6 +54,10 @@ class ORBStrategy:
             entry_confirmation=str(self.orb_config["entry_confirmation"]),
             volume_threshold_multiplier=float(self.orb_config["volume_threshold_multiplier"]),
             max_entries_per_day=int(self.orb_config["max_entries_per_day"]),
+            min_range_atr_pct=float((self.filters_config or {}).get("min_range_atr_pct", 0.0)),
+            max_range_atr_pct=float((self.filters_config or {}).get("max_range_atr_pct", 1e9)),
+            trend_filter_enabled=bool((self.filters_config or {}).get("trend_filter_enabled", False)),
+            trend_sma_period=int((self.filters_config or {}).get("trend_sma_period", 20)),
         )
 
         if signals.empty:

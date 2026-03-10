@@ -50,6 +50,39 @@ def test_generate_orb_signals_long_breakout() -> None:
     assert out.iloc[0]["side"] == "long"
 
 
+def test_atr_filter_rejects_signal_when_range_too_small() -> None:
+    bars = _sample_intraday()
+    out = generate_orb_signals(
+        bars,
+        opening_range_minutes=15,
+        session_open="14:30",
+        entry_window_hours=2,
+        entry_confirmation="close",
+        volume_threshold_multiplier=1.5,
+        max_entries_per_day=1,
+        min_range_atr_pct=10.0,
+        max_range_atr_pct=100.0,
+    )
+    assert out.empty
+
+
+def test_trend_filter_blocks_countertrend_entries() -> None:
+    bars = _sample_intraday()
+    out = generate_orb_signals(
+        bars,
+        opening_range_minutes=15,
+        session_open="14:30",
+        entry_window_hours=2,
+        entry_confirmation="close",
+        volume_threshold_multiplier=1.5,
+        max_entries_per_day=1,
+        trend_filter_enabled=True,
+        trend_sma_period=2,
+    )
+    # With single-day sample, close==sma so directional filter blocks entries.
+    assert out.empty
+
+
 def test_orb_strategy_uses_yaml_config(tmp_path: Path) -> None:
     cfg = {
         "orb": {

@@ -10,12 +10,12 @@ risk:
   risk_per_trade_pct: 1.0
   max_position_pct: 10.0
   reward_risk_ratio: 1.5
-  trailing_stop_enabled: false
+  trailing_stop_enabled: true
   trailing_stop_activation_r: 1.0
   trailing_stop_trail_r: 0.5
   exit_before_close_minutes: 5
 filters:
   min_range_atr_pct: 0.3
   max_range_atr_pct: 3.0
-  trend_filter_enabled: false
+  trend_filter_enabled: true
   trend_sma_period: 20

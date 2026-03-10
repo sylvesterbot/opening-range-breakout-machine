@@ -53,6 +53,29 @@ def test_engine_next_bar_open_fill_and_costs() -> None:
     assert len(equity) == len(_bars())
 
 
+def test_trailing_stop_and_exit_before_close_trigger() -> None:
+    bars = _bars().copy()
+    bars["high"] = [101.0, 103.0, 103.5, 103.6, 103.6, 103.6]
+    bars["low"] = [99.5, 100.5, 101.0, 101.0, 100.0, 99.0]
+    engine = BacktestEngine(
+        BacktestConfig(
+            initial_capital=100000,
+            commission_per_share=0.005,
+            slippage_pct=0.0,
+            spread_bps=0.0,
+            benchmark="SPY",
+            trailing_stop_enabled=True,
+            trailing_stop_activation_r=1.0,
+            trailing_stop_trail_r=0.5,
+            exit_before_close_minutes=300,
+            session_close_utc="15:00",
+        )
+    )
+    trades, _ = engine.run(bars, _signals())
+    assert len(trades) == 1
+    assert float(trades.loc[0, "exit_price"]) > 0
+
+
 def test_metrics_returns_required_keys() -> None:
     engine = BacktestEngine(
         BacktestConfig(

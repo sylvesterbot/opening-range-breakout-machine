@@ -19,6 +19,11 @@ class BacktestConfig:
     slippage_pct: float
     spread_bps: float
     benchmark: str
+    trailing_stop_enabled: bool = False
+    trailing_stop_activation_r: float = 1.0
+    trailing_stop_trail_r: float = 0.5
+    exit_before_close_minutes: int = 5
+    session_close_utc: str = "21:00"
 
 
 class BacktestEngine:
@@ -69,30 +74,63 @@ class BacktestEngine:
             exit_ts = pd.to_datetime(bars.iloc[-1]["timestamp"], utc=True)
             exit_idx = len(bars) - 1
 
+            initial_risk = abs(entry_fill - stop)
+            trailing_stop = stop
+            peak = entry_fill
+            trough = entry_fill
             for j in range(i, len(bars)):
                 b = bars.iloc[j]
                 hi = float(b["high"])
                 lo = float(b["low"])
+                ts = pd.to_datetime(b["timestamp"], utc=True)
+
+                # forced exit before close
+                close_h, close_m = map(int, self.config.session_close_utc.split(":"))
+                session_close = ts.normalize() + pd.Timedelta(hours=close_h, minutes=close_m)
+                force_exit_time = session_close - pd.Timedelta(minutes=self.config.exit_before_close_minutes)
+                if ts >= force_exit_time:
+                    exit_price = float(b["close"])
+                    exit_ts = ts
+                    exit_idx = j
+                    break
+
+                if self.config.trailing_stop_enabled and initial_risk > 0:
+                    if side == "long":
+                        peak = max(peak, hi)
+                        if (peak - entry_fill) >= self.config.trailing_stop_activation_r * initial_risk:
+                            trailing_stop = max(
+                                trailing_stop,
+                                peak - self.config.trailing_stop_trail_r * initial_risk,
+                            )
+                    else:
+                        trough = min(trough, lo)
+                        if (entry_fill - trough) >= self.config.trailing_stop_activation_r * initial_risk:
+                            trailing_stop = min(
+                                trailing_stop,
+                                trough + self.config.trailing_stop_trail_r * initial_risk,
+                            )
+
+                stop_to_use = trailing_stop if self.config.trailing_stop_enabled else stop
                 if side == "long":
-                    if lo <= stop:
-                        exit_price = stop
-                        exit_ts = pd.to_datetime(b["timestamp"], utc=True)
+                    if lo <= stop_to_use:
+                        exit_price = stop_to_use
+                        exit_ts = ts
                         exit_idx = j
                         break
                     if hi >= target:
                         exit_price = target
-                        exit_ts = pd.to_datetime(b["timestamp"], utc=True)
+                        exit_ts = ts
                         exit_idx = j
                         break
                 else:
-                    if hi >= stop:
-                        exit_price = stop
-                        exit_ts = pd.to_datetime(b["timestamp"], utc=True)
+                    if hi >= stop_to_use:
+                        exit_price = stop_to_use
+                        exit_ts = ts
                         exit_idx = j
                         break
                     if lo <= target:
                         exit_price = target
-                        exit_ts = pd.to_datetime(b["timestamp"], utc=True)
+                        exit_ts = ts
                         exit_idx = j
                         break
 
