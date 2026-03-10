@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume", "symbol"]
@@ -32,6 +36,7 @@ def generate_orb_signals(
         DataFrame with signal rows.
     """
     if bars.empty:
+        logger.info("No bars provided to generate_orb_signals; returning empty signal frame")
         return pd.DataFrame(columns=["timestamp", "symbol", "side", "entry_price", "or_high", "or_low"])
 
     for col in REQUIRED_COLUMNS:

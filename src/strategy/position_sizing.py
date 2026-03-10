@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def compute_position_size(
     account_equity: float,
@@ -24,6 +28,12 @@ def compute_position_size(
     """
     unit_risk = abs(entry_price - stop_price)
     if account_equity <= 0 or entry_price <= 0 or unit_risk <= 0:
+        logger.warning(
+            "Rejected position size due to invalid inputs: equity=%s entry=%s stop=%s",
+            account_equity,
+            entry_price,
+            stop_price,
+        )
         return 0.0
 
     dollar_risk = account_equity * (risk_per_trade_pct / 100.0)

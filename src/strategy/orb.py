@@ -5,12 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import logging
 
 import pandas as pd
 import yaml
 
 from strategy.position_sizing import compute_position_size
 from strategy.signals import generate_orb_signals
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,6 +27,7 @@ class ORBStrategy:
     def from_yaml(cls, config_path: Path) -> "ORBStrategy":
         """Create strategy instance from YAML config."""
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        logger.info("Loaded ORB strategy config from %s", config_path)
         return cls(orb_config=payload["orb"], risk_config=payload["risk"])
 
     def run(self, bars: pd.DataFrame, session_open: str, account_equity: float = 100_000.0) -> pd.DataFrame:
