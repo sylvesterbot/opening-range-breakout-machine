@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import yaml
+
+sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from data.cleaner import DataCleaner
 from data.fetcher import MarketDataFetcher
@@ -40,6 +43,7 @@ def main() -> None:
                 start=data_cfg["start_date"],
                 end=data_cfg["end_date"],
                 asset_class=data_cfg["asset_class"],
+                fallback_source=data_cfg.get("fallback_source"),
             )
             storage.write_cache(key, raw)
             cache_state = "MISS->WRITE"

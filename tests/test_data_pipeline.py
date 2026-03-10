@@ -56,6 +56,24 @@ def test_fetcher_normalizes_multiindex_columns() -> None:
     assert out["close"].iloc[0] == 1.2
 
 
+def test_fetcher_falls_back_when_primary_fails() -> None:
+    def _fail(**_: object) -> pd.DataFrame:
+        raise RuntimeError("primary failed")
+
+    fetcher = MarketDataFetcher(providers={"alpaca": _fail, "yfinance": lambda **_: _bars("SPY")})
+    out = fetcher.fetch_symbol(
+        "SPY",
+        source="alpaca",
+        fallback_source="yfinance",
+        interval="5m",
+        start="2025-01-02",
+        end="2025-01-02",
+    )
+
+    assert not out.empty
+    assert out["source"].iloc[0] == "yfinance"
+
+
 def test_cleaner_generates_quality_gap_logs() -> None:
     cleaner = DataCleaner(target_timezone="UTC", session_open="09:30", session_close="16:00")
     raw = _bars("SPY")
@@ -66,6 +84,19 @@ def test_cleaner_generates_quality_gap_logs() -> None:
     assert "missing_bars_pct" in quality
     assert quality["duplicate_rows"] >= 1
     assert cleaned["timestamp"].is_monotonic_increasing
+
+
+def test_fetcher_rejects_unknown_fallback() -> None:
+    def _fail(**_: object) -> pd.DataFrame:
+        raise RuntimeError("primary failed")
+
+    fetcher = MarketDataFetcher(providers={"alpaca": _fail})
+    try:
+        fetcher.fetch_symbol("SPY", source="alpaca", fallback_source="yfinance", interval="5m", start="a", end="b")
+    except ValueError as exc:
+        assert "Unsupported fallback source" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for unsupported fallback source")
 
 
 def test_parquet_storage_and_cache_behavior(tmp_path: Path) -> None:
