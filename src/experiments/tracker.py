@@ -39,9 +39,14 @@ class ExperimentTracker:
         return hashlib.sha256(payload).hexdigest()
 
     def next_experiment_id(self) -> str:
-        """Generate next experiment id as experiment_XXX."""
+        """Generate next primary experiment id as experiment_XXX.
+
+        Note: the experiment log may include auxiliary ids (e.g. sensitivity_*) which do not
+        participate in the primary experiment sequence.
+        """
         existing = self.load_all()
-        return f"experiment_{len(existing) + 1:03d}"
+        primary = [r for r in existing if str(r.get("experiment_id", "")).startswith("experiment_")]
+        return f"experiment_{len(primary) + 1:03d}"
 
     def append(
         self,
@@ -51,10 +56,11 @@ class ExperimentTracker:
         data_range: dict[str, Any],
         notes: str,
         status: str,
+        experiment_id: str | None = None,
     ) -> ExperimentRecord:
         """Append one experiment record to JSONL and return it."""
         record = ExperimentRecord(
-            experiment_id=self.next_experiment_id(),
+            experiment_id=experiment_id or self.next_experiment_id(),
             timestamp=datetime.now(UTC).isoformat(),
             config_hash=self.config_hash(config_snapshot),
             config_snapshot=config_snapshot,
