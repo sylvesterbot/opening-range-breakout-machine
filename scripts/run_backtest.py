@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import yaml
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
@@ -11,6 +13,17 @@ from backtest.metrics import benchmark_buy_hold_return, compute_metrics
 from data.storage import ParquetStorage
 from strategy.orb import ORBStrategy
 from visualization.equity_curve import plot_equity_curve
+
+
+def _session_open_utc(backtest_cfg: dict, strategy: ORBStrategy) -> str:
+    profile = str(strategy.orb_config.get("session_profile", "equity"))
+    session_cfg = backtest_cfg["sessions"][profile]
+    hh, mm = map(int, str(session_cfg["open"]).split(":"))
+    tz_name = str(session_cfg["timezone"])
+    now = datetime.now(ZoneInfo(tz_name))
+    local_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    utc_dt = local_dt.astimezone(ZoneInfo("UTC"))
+    return utc_dt.strftime("%H:%M")
 
 
 def main() -> None:
@@ -32,7 +45,8 @@ def main() -> None:
     if bars is None or bars.empty:
         raise RuntimeError(f"No cached bars for {key}; run scripts/fetch_data.py first")
 
-    signals = strategy.run(bars, session_open="14:30", account_equity=float(bt_cfg["initial_capital"]))
+    session_open_utc = _session_open_utc(backtest_cfg, strategy)
+    signals = strategy.run(bars, session_open=session_open_utc, account_equity=float(bt_cfg["initial_capital"]))
     engine = BacktestEngine(
         BacktestConfig(
             initial_capital=float(bt_cfg["initial_capital"]),
@@ -49,6 +63,7 @@ def main() -> None:
     plot_path = plot_equity_curve(equity, Path("output/plots/equity_curve.png"))
 
     print("=== Phase 5 Backtest Summary ===")
+    print(f"session_open_utc: {session_open_utc}")
     summary_table = "\n".join([f"{k:>24} | {v}" for k, v in metrics.items()])
     print(summary_table)
     print(f"{'benchmark_buy_hold_return':>24} | {bench_ret}")

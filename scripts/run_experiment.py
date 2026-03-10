@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -15,6 +17,16 @@ from data.storage import ParquetStorage
 from experiments.comparator import compare_experiments
 from experiments.tracker import ExperimentTracker
 from strategy.orb import ORBStrategy
+
+
+def _session_open_utc(backtest_cfg: dict, strategy: ORBStrategy) -> str:
+    profile = str(strategy.orb_config.get("session_profile", "equity"))
+    session_cfg = backtest_cfg["sessions"][profile]
+    hh, mm = map(int, str(session_cfg["open"]).split(":"))
+    tz_name = str(session_cfg["timezone"])
+    now = datetime.now(ZoneInfo(tz_name))
+    local_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    return local_dt.astimezone(ZoneInfo("UTC")).strftime("%H:%M")
 
 
 def _write_report(path: Path, current: dict, previous: dict | None, comparison: list[dict]) -> None:
@@ -56,7 +68,8 @@ def main() -> None:
         raise RuntimeError(f"No cached bars for {key}; run scripts/fetch_data.py first")
 
     strategy = ORBStrategy.from_yaml(root / "config/strategy_params.yaml")
-    signals = strategy.run(bars, session_open="14:30", account_equity=float(bt_cfg["initial_capital"]))
+    session_open_utc = _session_open_utc(backtest_cfg, strategy)
+    signals = strategy.run(bars, session_open=session_open_utc, account_equity=float(bt_cfg["initial_capital"]))
 
     engine = BacktestEngine(
         BacktestConfig(

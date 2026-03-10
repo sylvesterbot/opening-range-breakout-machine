@@ -1262,6 +1262,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "tzdata" },
     { name = "yfinance" },
 ]
 
@@ -1282,6 +1283,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.31" },
+    { name = "tzdata", specifier = ">=2024.1" },
     { name = "yfinance", specifier = ">=0.2.36" },
 ]
 provides-extras = ["dev"]
