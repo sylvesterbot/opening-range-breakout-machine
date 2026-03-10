@@ -4,7 +4,7 @@ data:
   interval: "5m"
   start_date: "2026-03-03"
   end_date: "2026-03-07"
-  source: "alpaca"
+  source: "yfinance"
   fallback_source: "yfinance"
   timezone: "UTC"
   session_hours_only: true
