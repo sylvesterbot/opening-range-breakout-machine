@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import logging
 from pathlib import Path
 import sys
 from datetime import datetime
@@ -27,9 +29,29 @@ def _session_time_utc(backtest_cfg: dict, strategy: ORBStrategy, key: str) -> st
     session_cfg = backtest_cfg["sessions"][profile]
     hh, mm = map(int, str(session_cfg[key]).split(":"))
     tz_name = str(session_cfg["timezone"])
-    now = datetime.now(ZoneInfo(tz_name))
-    local_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+    start_date = str(backtest_cfg.get("data", {}).get("start_date", "2025-01-01"))
+    ref_date = datetime.fromisoformat(start_date)
+    local_dt = datetime(ref_date.year, ref_date.month, ref_date.day, hh, mm, tzinfo=ZoneInfo(tz_name))
     return local_dt.astimezone(ZoneInfo("UTC")).strftime("%H:%M")
+
+
+def _generate_tearsheet_with_timeout(
+    daily_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    output_path: Path,
+    timeout_sec: int,
+) -> str:
+    """Run expensive tear-sheet generation in a bounded subprocess."""
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(generate_tearsheet, daily_returns, benchmark_returns, output_path)
+        try:
+            p = fut.result(timeout=timeout_sec)
+            return str(p)
+        except concurrent.futures.TimeoutError:
+            fut.cancel()
+            return f"SKIPPED (timeout>{timeout_sec}s)"
 
 
 def _write_report(path: Path, current: dict, previous: dict | None, comparison: list[dict]) -> None:
@@ -54,6 +76,9 @@ def main() -> None:
     parser.add_argument("--notes", required=True)
     parser.add_argument("--status", default="experimental")
     parser.add_argument("--no-plots", action="store_true", help="Skip heavy plot/tearsheet generation")
+    parser.add_argument("--plots-timeout-sec", type=int, default=90, help="Timeout for tear sheet generation")
+    parser.add_argument("--skip-walk-forward", action="store_true", help="Skip walk-forward optimization pass")
+    parser.add_argument("--mc-iterations", type=int, default=None, help="Override monte carlo iterations for faster runs")
     args = parser.parse_args()
 
     root = Path(".")
@@ -97,7 +122,7 @@ def main() -> None:
     mc = run_trade_bootstrap_monte_carlo(
         trades,
         MonteCarloConfig(
-            iterations=int(mc_cfg["iterations"]),
+            iterations=int(args.mc_iterations if args.mc_iterations is not None else mc_cfg["iterations"]),
             max_iterations=int(mc_cfg["max_iterations"]),
             convergence_threshold=float(mc_cfg["convergence_threshold"]),
             early_stopping=bool(mc_cfg["early_stopping"]),
@@ -123,20 +148,24 @@ def main() -> None:
     if args.no_plots:
         tearsheet_path = "SKIPPED (--no-plots)"
     else:
-        tearsheet_path = generate_tearsheet(
+        tearsheet_path = _generate_tearsheet_with_timeout(
             daily_returns,
             bench_returns,
             root / "output/reports/tearsheet.html",
+            timeout_sec=int(args.plots_timeout_sec),
         )
 
-    wf = run_walk_forward(
-        bars,
-        backtest_cfg,
-        root / "config/strategy_params.yaml",
-        train_months=6,
-        test_months=1,
-        session_open_utc=session_open_utc,
-    )
+    if args.skip_walk_forward:
+        wf = type("_WF", (), {"in_sample_sharpe_mean": 0.0, "out_sample_sharpe_mean": 0.0, "sharpe_degradation": 0.0, "windows": []})()
+    else:
+        wf = run_walk_forward(
+            bars,
+            backtest_cfg,
+            root / "config/strategy_params.yaml",
+            train_months=6,
+            test_months=1,
+            session_open_utc=session_open_utc,
+        )
 
     mc_stats = dict(mc.stats)
     mc_stats.update(qs_stats)
