@@ -18,6 +18,7 @@ from backtest.metrics import compute_metrics
 from backtest.monte_carlo import MonteCarloConfig, run_trade_bootstrap_monte_carlo
 from backtest.quantstats_mc import generate_tearsheet, run_quantstats_monte_carlo
 from backtest.walk_forward import run_walk_forward
+from backtest.scientific_validation import bootstrap_metric_ci, walk_forward_stability_score
 from data.storage import ParquetStorage
 from experiments.comparator import compare_experiments
 from experiments.tracker import ExperimentTracker
@@ -167,6 +168,12 @@ def main() -> None:
             session_open_utc=session_open_utc,
         )
 
+    wf_stability = walk_forward_stability_score(
+        [float(w.in_sample.get("sharpe_ratio", 0.0)) for w in getattr(wf, "windows", [])],
+        [float(w.out_sample.get("sharpe_ratio", 0.0)) for w in getattr(wf, "windows", [])],
+    )
+    sharpe_ci = bootstrap_metric_ci(pd.Series([float(w.out_sample.get("sharpe_ratio", 0.0)) for w in getattr(wf, "windows", [])]))
+
     mc_stats = dict(mc.stats)
     mc_stats.update(qs_stats)
     mc_stats.update(
@@ -175,6 +182,10 @@ def main() -> None:
             "wf_out_sample_sharpe_mean": wf.out_sample_sharpe_mean,
             "wf_sharpe_degradation": wf.sharpe_degradation,
             "wf_windows": float(len(wf.windows)),
+            "wf_stability_ratio": wf_stability["wf_stability_ratio"],
+            "wf_degradation": wf_stability["wf_degradation"],
+            "wf_sharpe_ci_low": sharpe_ci["ci_low"],
+            "wf_sharpe_ci_high": sharpe_ci["ci_high"],
         }
     )
 
