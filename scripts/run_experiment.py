@@ -6,6 +6,7 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import yaml
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
@@ -13,6 +14,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 from backtest.engine import BacktestConfig, BacktestEngine
 from backtest.metrics import compute_metrics
 from backtest.monte_carlo import MonteCarloConfig, run_trade_bootstrap_monte_carlo
+from backtest.quantstats_mc import generate_tearsheet, run_quantstats_monte_carlo
+from backtest.walk_forward import run_walk_forward
 from data.storage import ParquetStorage
 from experiments.comparator import compare_experiments
 from experiments.tracker import ExperimentTracker
@@ -103,6 +106,38 @@ def main() -> None:
         ),
     )
 
+    daily_equity = equity.copy()
+    daily_equity["date"] = daily_equity["timestamp"].dt.date
+    daily_eq = daily_equity.groupby("date", as_index=False)["equity"].last()
+    daily_eq["date"] = pd.to_datetime(daily_eq["date"])
+    daily_returns = daily_eq.set_index("date")["equity"].pct_change().dropna()
+
+    benchmark_returns = bars.copy().sort_values("timestamp")
+    benchmark_returns["date"] = pd.to_datetime(benchmark_returns["timestamp"], utc=True).dt.date
+    bench_daily = benchmark_returns.groupby("date", as_index=False)["close"].last()
+    bench_daily["date"] = pd.to_datetime(bench_daily["date"])
+    bench_returns = bench_daily.set_index("date")["close"].pct_change().dropna()
+
+    qs_stats = run_quantstats_monte_carlo(daily_returns, sims=1000, seed=42)
+    tearsheet_path = generate_tearsheet(
+        daily_returns,
+        bench_returns,
+        root / "output/reports/tearsheet.html",
+    )
+
+    wf = run_walk_forward(bars, backtest_cfg, root / "config/strategy_params.yaml", train_months=6, test_months=1)
+
+    mc_stats = dict(mc.stats)
+    mc_stats.update(qs_stats)
+    mc_stats.update(
+        {
+            "wf_in_sample_sharpe_mean": wf.in_sample_sharpe_mean,
+            "wf_out_sample_sharpe_mean": wf.out_sample_sharpe_mean,
+            "wf_sharpe_degradation": wf.sharpe_degradation,
+            "wf_windows": float(len(wf.windows)),
+        }
+    )
+
     tracker = ExperimentTracker(root / "output/experiments/experiment_log.jsonl")
     record = tracker.append(
         config_snapshot={
@@ -111,7 +146,7 @@ def main() -> None:
             "monte_carlo": mc_cfg,
         },
         metrics=metrics,
-        mc_stats=mc.stats,
+        mc_stats=mc_stats,
         data_range={
             "start_date": data_cfg["start_date"],
             "end_date": data_cfg["end_date"],
@@ -123,7 +158,8 @@ def main() -> None:
     )
 
     all_rows = tracker.load_all()
-    previous = all_rows[-2] if len(all_rows) > 1 else None
+    primary_rows = [r for r in all_rows if str(r.get("experiment_id", "")).startswith("experiment_")]
+    previous = primary_rows[-2] if len(primary_rows) > 1 else None
     comparison = compare_experiments(previous, record.__dict__) if previous else []
 
     report_path = root / f"output/experiment_reports/exp_{record.experiment_id}_report.md"
@@ -134,6 +170,9 @@ def main() -> None:
     print(f"status: {record.status}")
     print(f"log_path: {tracker.log_path}")
     print(f"report_path: {report_path}")
+    print(f"tearsheet_path: {tearsheet_path}")
+    print(f"walk_forward_windows: {len(wf.windows)}")
+    print(f"walk_forward_sharpe_degradation: {wf.sharpe_degradation}")
     if previous:
         print(f"compared_to: {previous['experiment_id']}")
         print(f"delta_rows: {len(comparison)}")

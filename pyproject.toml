@@ -14,7 +14,9 @@ dependencies = [
   "alpaca-py>=0.21",
   "python-dotenv>=1.0",
   "tzdata>=2024.1",
+  "quantstats>=0.0.63",
 ]
+
 
 
 [project.optional-dependencies]

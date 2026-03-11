@@ -46,6 +46,9 @@ class BacktestEngine:
             return pd.DataFrame(), pd.DataFrame()
 
         bars = bars.sort_values("timestamp").reset_index(drop=True).copy()
+        if signals.empty or "timestamp" not in signals.columns:
+            eq = pd.DataFrame({"timestamp": pd.to_datetime(bars["timestamp"], utc=True), "equity": self.config.initial_capital})
+            return pd.DataFrame(), eq
         bars["timestamp"] = pd.to_datetime(bars["timestamp"], utc=True)
         equity = self.config.initial_capital
         realized = 0.0
