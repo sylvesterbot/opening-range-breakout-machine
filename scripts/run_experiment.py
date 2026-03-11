@@ -53,6 +53,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--notes", required=True)
     parser.add_argument("--status", default="experimental")
+    parser.add_argument("--no-plots", action="store_true", help="Skip heavy plot/tearsheet generation")
     args = parser.parse_args()
 
     root = Path(".")
@@ -119,11 +120,14 @@ def main() -> None:
     bench_returns = bench_daily.set_index("date")["close"].pct_change().dropna()
 
     qs_stats = run_quantstats_monte_carlo(daily_returns, sims=1000, seed=42)
-    tearsheet_path = generate_tearsheet(
-        daily_returns,
-        bench_returns,
-        root / "output/reports/tearsheet.html",
-    )
+    if args.no_plots:
+        tearsheet_path = "SKIPPED (--no-plots)"
+    else:
+        tearsheet_path = generate_tearsheet(
+            daily_returns,
+            bench_returns,
+            root / "output/reports/tearsheet.html",
+        )
 
     wf = run_walk_forward(
         bars,
