@@ -30,6 +30,7 @@ def run_walk_forward(
     strategy_path: Path,
     train_months: int = 6,
     test_months: int = 1,
+    session_open_utc: str = "14:30",
 ) -> WalkForwardResult:
     """Run rolling train/test walk-forward over intraday bars."""
     if bars.empty:
@@ -81,7 +82,7 @@ def run_walk_forward(
             tmp.parent.mkdir(parents=True, exist_ok=True)
             tmp.write_text(yaml.safe_dump(cfg), encoding="utf-8")
             strat = ORBStrategy.from_yaml(tmp)
-            sig_train = strat.run(train, session_open="14:30", account_equity=engine_cfg.initial_capital)
+            sig_train = strat.run(train, session_open=session_open_utc, account_equity=engine_cfg.initial_capital)
             tr_train, eq_train = BacktestEngine(engine_cfg).run(train, sig_train)
             m_train = compute_metrics(eq_train, tr_train)
             if m_train["sharpe_ratio"] > best_sharpe:
@@ -92,11 +93,11 @@ def run_walk_forward(
         tmp_best.write_text(yaml.safe_dump(best_cfg), encoding="utf-8")
         strat_best = ORBStrategy.from_yaml(tmp_best)
 
-        sig_train_best = strat_best.run(train, session_open="14:30", account_equity=engine_cfg.initial_capital)
+        sig_train_best = strat_best.run(train, session_open=session_open_utc, account_equity=engine_cfg.initial_capital)
         tr_train_best, eq_train_best = BacktestEngine(engine_cfg).run(train, sig_train_best)
         m_train_best = compute_metrics(eq_train_best, tr_train_best)
 
-        sig_test = strat_best.run(test, session_open="14:30", account_equity=engine_cfg.initial_capital)
+        sig_test = strat_best.run(test, session_open=session_open_utc, account_equity=engine_cfg.initial_capital)
         tr_test, eq_test = BacktestEngine(engine_cfg).run(test, sig_test)
         m_test = compute_metrics(eq_test, tr_test)
 

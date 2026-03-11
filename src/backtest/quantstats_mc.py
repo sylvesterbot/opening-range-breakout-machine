@@ -18,20 +18,43 @@ def run_quantstats_monte_carlo(daily_returns: pd.Series, sims: int = 1000, seed:
         }
 
     mc = qs.stats.montecarlo(daily_returns, sims=sims, bust=-0.20, goal=0.50, seed=seed)
-    # quantstats return shape can vary by version; handle dict-like and DataFrame-like responses.
-    if hasattr(mc, "to_dict"):
-        payload = mc.to_dict()
-    elif isinstance(mc, dict):
-        payload = mc
-    else:
-        payload = {}
 
-    bust = float(payload.get("bust", payload.get("bust_probability", 0.0)))
-    goal = float(payload.get("goal", payload.get("goal_probability", 0.0)))
+    bust = float(getattr(mc, "bust_probability", 0.0) or 0.0)
+    goal = float(getattr(mc, "goal_probability", 0.0) or 0.0)
 
-    # fallback distribution proxies from returns if unavailable
-    sharpe_median = float(qs.stats.sharpe(daily_returns)) if len(daily_returns) > 1 else 0.0
-    cagr_median = float(qs.stats.cagr(daily_returns)) if len(daily_returns) > 1 else 0.0
+    sharpe_median = 0.0
+    cagr_median = 0.0
+
+    # Primary path (current quantstats): MonteCarloResult.data is a DataFrame of simulated equity/return paths.
+    data = getattr(mc, "data", None)
+    if isinstance(data, pd.DataFrame) and not data.empty:
+        sharpe_vals: list[float] = []
+        cagr_vals: list[float] = []
+        for col in data.columns:
+            series = pd.to_numeric(data[col], errors="coerce").dropna()
+            if len(series) < 2:
+                continue
+            sim_rets = series.pct_change().dropna()
+            if sim_rets.empty:
+                continue
+            sharpe_vals.append(float(qs.stats.sharpe(sim_rets)))
+            cagr_vals.append(float(qs.stats.cagr(sim_rets)))
+        if sharpe_vals:
+            sharpe_median = float(pd.Series(sharpe_vals).median())
+        if cagr_vals:
+            cagr_median = float(pd.Series(cagr_vals).median())
+
+    # Backward-compat fallback for dict-like returns and unknown formats.
+    if sharpe_median == 0.0 or cagr_median == 0.0:
+        payload = mc if isinstance(mc, dict) else {}
+        sharpe_median = float(payload.get("sharpe_median", payload.get("median_sharpe", sharpe_median)))
+        cagr_median = float(payload.get("cagr_median", payload.get("median_cagr", cagr_median)))
+
+    # Final fallback: deterministic baseline from original daily returns.
+    if sharpe_median == 0.0 and len(daily_returns) > 1:
+        sharpe_median = float(qs.stats.sharpe(daily_returns))
+    if cagr_median == 0.0 and len(daily_returns) > 1:
+        cagr_median = float(qs.stats.cagr(daily_returns))
 
     return {
         "qs_bust_probability": bust,

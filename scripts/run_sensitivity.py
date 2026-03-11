@@ -58,6 +58,8 @@ def main() -> None:
     if bars is None or bars.empty:
         raise RuntimeError("Missing cached bars; run scripts/fetch_data.py")
 
+    risk_cfg = strategy_cfg.get("risk", {})
+    session_close_utc = _session_time_utc(backtest_cfg, strategy_cfg, "close")
     engine = BacktestEngine(
         BacktestConfig(
             initial_capital=float(bt["initial_capital"]),
@@ -65,6 +67,11 @@ def main() -> None:
             slippage_pct=float(bt["slippage_pct"]),
             spread_bps=float(bt.get("spread_bps", 1.0)),
             benchmark=str(bt["benchmark"]),
+            trailing_stop_enabled=bool(risk_cfg.get("trailing_stop_enabled", False)),
+            trailing_stop_activation_r=float(risk_cfg.get("trailing_stop_activation_r", 1.0)),
+            trailing_stop_trail_r=float(risk_cfg.get("trailing_stop_trail_r", 0.5)),
+            exit_before_close_minutes=int(risk_cfg.get("exit_before_close_minutes", 5)),
+            session_close_utc=session_close_utc,
         )
     )
 

@@ -125,7 +125,14 @@ def main() -> None:
         root / "output/reports/tearsheet.html",
     )
 
-    wf = run_walk_forward(bars, backtest_cfg, root / "config/strategy_params.yaml", train_months=6, test_months=1)
+    wf = run_walk_forward(
+        bars,
+        backtest_cfg,
+        root / "config/strategy_params.yaml",
+        train_months=6,
+        test_months=1,
+        session_open_utc=session_open_utc,
+    )
 
     mc_stats = dict(mc.stats)
     mc_stats.update(qs_stats)
